@@ -61,8 +61,9 @@ globalThis.console = {
 
 // Minimal URLSearchParams + URL implementations for `rewrite` rules. QuickJS has
 // no built-in URL/URLSearchParams, so the host (Rust) constructs these from the
-// parsed URL and reads the mutated state back. Serialization fidelity is handled
-// on the Rust side from `_pairs`, so toString() here is intentionally lightweight.
+// parsed URL and reads the mutated state back. `_pairs` holds decoded values;
+// toString() and the string constructor follow application/x-www-form-urlencoded
+// so `new URLSearchParams(url.search)` round-trips nested, encoded URLs intact.
 class URLSearchParams {
   constructor(init) {
     this._pairs = [];
@@ -107,7 +108,23 @@ class URLSearchParams {
     for (const pair of this._pairs) cb(pair[1], pair[0], this);
   }
   toString() {
-    return this._pairs.map((p) => p[0] + "=" + p[1]).join("&");
+    return this._pairs.map((p) => __formEncode(p[0]) + "=" + __formEncode(p[1])).join("&");
+  }
+}
+
+function __formEncode(value) {
+  return encodeURIComponent(value)
+    .replace(/[!'()~]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase())
+    .replace(/%20/g, "+");
+}
+
+function __formDecode(value) {
+  const s = value.replace(/\+/g, " ");
+  try {
+    return decodeURIComponent(s);
+  } catch (_) {
+    // Malformed escape: keep the raw text instead of failing the whole rule.
+    return s;
   }
 }
 
@@ -117,7 +134,9 @@ function __parseQuery(search) {
   if (!s) return [];
   return s.split("&").map((seg) => {
     const i = seg.indexOf("=");
-    return i === -1 ? [seg, ""] : [seg.slice(0, i), seg.slice(i + 1)];
+    return i === -1
+      ? [__formDecode(seg), ""]
+      : [__formDecode(seg.slice(0, i)), __formDecode(seg.slice(i + 1))];
   });
 }
 
