@@ -771,6 +771,39 @@ globalThis.__SUPERSURFER_CONFIG__ = {{
     }
 
     #[test]
+    fn rewrite_urlsearchparams_string_constructor_keeps_nested_query() {
+        assert_eq!(
+            rewrite_url(
+                r#"return new URLSearchParams(u.search).get("link") || u.href;"#,
+                "https://redirect-url.email/?link=https%3A%2F%2Fodoo.example.com%2Fmail%2Fview%3Fmodel%3Dcrm.lead%26res_id%3D7973&apn=com.odoo.mobile"
+            ),
+            "https://odoo.example.com/mail/view?model=crm.lead&res_id=7973"
+        );
+    }
+
+    #[test]
+    fn rewrite_search_getter_percent_encodes_pairs() {
+        assert_eq!(
+            rewrite_url(
+                r#"return "https://out.test/" + u.search;"#,
+                "https://example.com/?next=https%3A%2F%2Fa.test%2F%3Fx%3D1%26y%3D2&q=a+b"
+            ),
+            "https://out.test/?next=https%3A%2F%2Fa.test%2F%3Fx%3D1%26y%3D2&q=a+b"
+        );
+    }
+
+    #[test]
+    fn urlsearchparams_string_constructor_decodes_values() {
+        assert_eq!(
+            rewrite_url(
+                r#"return "https://out.test/" + encodeURIComponent(new URLSearchParams("?a=x%26y+z").get("a"));"#,
+                "https://example.com/"
+            ),
+            "https://out.test/x%26y%20z"
+        );
+    }
+
+    #[test]
     fn resolve_rules_are_evaluated_without_network() {
         let js = format!(
             r#"{}{}
